@@ -1,0 +1,11 @@
+langchain
+langgraph
+pydantic
+python-dotenv
+langchain-openai
+fastapi
+uvicorn[standard]
+strawberry-graphql[fastapi]
+requests
+pandas
+openpyxl

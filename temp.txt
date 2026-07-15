@@ -1,0 +1,221 @@
+import streamlit as st
+import requests
+import json
+
+# --- Configuration ---
+API_BASE_URL = "http://localhost:8000"
+
+# --- UI Design ---
+st.set_page_config(
+    page_title="AI Feedback Analyzer",
+    page_title="FeedbackAI API",
+    page_icon="🤖",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+st.title("🤖 AI Customer Feedback Analyzer")
+st.markdown(
+    """
+Welcome to the advanced AI-powered feedback analysis tool.
+Enter any customer feedback, email, or review below and select an analysis type from the sidebar to get instant insights.
+"""
+st.title("FeedbackAI API")
+st.subheader("Analyze customer feedback with one API call.")
+st.markdown("---")
+
+# --- Tabbed Interface ---
+tab_playground, tab_dashboard, tab_docs, tab_pricing, tab_analytics = st.tabs(
+    ["API Playground", "Dashboard", "Documentation", "Pricing", "Analytics"]
+)
+
+# --- Sidebar for Options ---
+with st.sidebar:
+    st.header("Analysis Options")
+    analysis_type = st.radio(
+        "Choose an analysis:",
+        [
+            "Full Analysis",
+            "Sentiment",
+            "Emotion",
+            "Toxicity",
+            "Categorization",
+            "Urgency",
+            "Keywords",
+            "Aspect-Based Sentiment",
+        ],
+        help="Select the type of analysis you want to perform on the text.",
+    )
+with tab_playground:
+    st.header("Interactive API Playground")
+    col1, col2 = st.columns(2, gap="large")
+
+    st.markdown("---")
+    st.info(
+        "**How to use:**\n1. Make sure the backend API is running.\n2. Enter text in the text area.\n3. Click 'Analyze Text'."
+    )
+    with col1:
+        st.subheader("Input")
+        st.markdown("Enter any customer feedback below.")
+        input_text = st.text_area(
+            "Text Input",
+            height=200,
+            placeholder="e.g., The delivery was late but the support team was very helpful.",
+            label_visibility="collapsed",
+        )
+        
+        st.markdown("Your input is sent to the API like this:")
+        st.code(f'{{\n  "text": "{input_text[:50]}..."\n}}', language="json")
+        
+        analyze_button = st.button("▶️ Run Analysis", type="primary", use_container_width=True)
+
+
+# --- Main Content Area ---
+col1, col2 = st.columns(2, gap="large")
+
+with col1:
+    st.subheader("Input Text")
+    input_text = st.text_area(
+        "Enter customer feedback, review, or email here:",
+        height=300,
+        placeholder="e.g., The delivery was late but the support team was very helpful.",
+    )
+    analyze_button = st.button("Analyze Text", type="primary", use_container_width=True)
+
+with col2:
+    st.subheader("Analysis Results")
+    if analyze_button:
+        if not input_text:
+            st.warning("Please enter some text to analyze.")
+        else:
+            endpoint_map = {
+                "Full Analysis": "/analyze",
+                "Sentiment": "/sentiment",
+                "Emotion": "/emotion",
+                "Toxicity": "/detect-toxicity",
+                "Categorization": "/categorize",
+                "Urgency": "/detect-urgency",
+                "Keywords": "/extract-keywords",
+                "Aspect-Based Sentiment": "/aspect-sentiment",
+            }
+            endpoint = endpoint_map[analysis_type]
+            api_url = f"{API_BASE_URL}{endpoint}"
+
+            try:
+                # --- Display Formatted Results ---
+                if analysis_type == "Full Analysis":
+                    with st.spinner("Performing comprehensive analysis... This may take a moment."):
+                        # Make multiple API calls for the full analysis
+    with col2:
+        st.subheader("Output")
+        st.markdown("The API returns a structured JSON response.")
+        
+        if analyze_button:
+            if not input_text:
+                st.warning("Please enter some text to analyze.")
+            else:
+                with st.spinner("Calling API..."):
+                    try:
+                        # --- Call the /analyze endpoint for the main data ---
+                        analyze_res = requests.post(f"{API_BASE_URL}/analyze", json={"text": input_text})
+                        toxicity_res = requests.post(f"{API_BASE_URL}/detect-toxicity", json={"text": input_text})
+                        keywords_res = requests.post(f"{API_BASE_URL}/extract-keywords", json={"text": input_text})
+                        aspect_res = requests.post(f"{API_BASE_URL}/aspect-sentiment", json={"text": input_text})
+
+                        # Check for errors
+                        analyze_res.raise_for_status()
+                        
+                        # Display results in a dashboard format
+                        st.subheader("Comprehensive Analysis Dashboard")
+                        
+                        # --- Main Analysis ---
+                        main_data = analyze_res.json()
+                        st.metric(
+                            label="Sentiment",
+                            value=main_data.get("sentiment"),
+                            delta=f"{main_data.get('confidence', 0)*100:.1f}% Confidence",
+
+                        # --- Call the /reply endpoint ---
+                        reply_res = requests.post(
+                            f"{API_BASE_URL}/reply",
+                            json={"text": input_text, "tone": "Professional"},
+                        )
+                        c1, c2 = st.columns(2)
+                        c1.info(f"**Urgency:** {main_data.get('urgency')}")
+                        c2.info(f"**Category:** {main_data.get('category')}")
+                        st.caption("Summary")
+                        st.write(main_data.get("summary"))
+
+                        # --- Aspect & Keyword Analysis ---
+                        if aspect_res.ok:
+                            st.caption("Aspect-Based Sentiment")
+                            for aspect in aspect_res.json().get("aspects", []):
+                                st.markdown(f"- **{aspect['aspect']}**: `{aspect['sentiment']}`")
+                        
+                        if keywords_res.ok:
+                            st.caption("Keywords")
+                            st.write(", ".join(keywords_res.json().get("keywords", [])))
+                        # --- Construct the final JSON for display ---
+                        output_json = {
+                            "sentiment": main_data.get("sentiment"),
+                            "confidence": main_data.get("confidence"),
+                            "emotions": main_data.get("emotions"),
+                            "urgency": main_data.get("urgency"),
+                            "category": main_data.get("category"),
+                            "summary": main_data.get("summary"),
+                            "suggested_reply": reply_res.json() if reply_res.ok else "Could not generate reply.",
+                        }
+                        
+                        st.json(output_json)
+
+                        # --- Moderation ---
+                        if toxicity_res.ok:
+                            st.caption("Toxicity Analysis")
+                            toxicity_data = toxicity_res.json()
+                            if toxicity_data.get("is_toxic"):
+                                st.error(f"Toxic content detected: {', '.join(toxicity_data.get('toxicity_types', []))}")
+                            else:
+                                st.success("No toxic content detected.")
+                    except requests.exceptions.RequestException as e:
+                        st.error(f"API Connection Error: Could not connect to the backend at `{API_BASE_URL}`.")
+                        st.info("Please make sure the FastAPI server is running in a separate terminal using the command: `python main.py`")
+        else:
+            # Show a placeholder
+            st.json({
+                "sentiment": "Mixed",
+                "confidence": 0.96,
+                "emotions": ["Frustrated", "Satisfied"],
+                "urgency": "Medium",
+                "category": "Delivery",
+                "summary": "Customer experienced delayed delivery but appreciated support.",
+                "suggested_reply": "We sincerely apologize for the delay..."
+            })
+
+                # Default display for other, single analysis types
+                else:
+                    with st.spinner(f"Performing {analysis_type}..."):
+                        response = requests.post(api_url, json={"text": input_text})
+                        response.raise_for_status()
+                        st.json(response.json())
+with tab_dashboard:
+    st.header("Analytics Dashboard")
+    st.info("This section is under construction. It will display charts and metrics about your feedback data.")
+    st.image("https://streamlit.io/images/brand/streamlit-logo-secondary-colormark-darktext.png", width=200)
+
+            except requests.exceptions.RequestException as e:
+                st.error(f"API Connection Error: Could not connect to the backend at `{API_BASE_URL}`.")
+                st.info("Please make sure the FastAPI server is running in a separate terminal using the command: `python main.py`")
+with tab_docs:
+    st.header("API Documentation")
+    st.info("This section is under construction. It will contain detailed information about all available API endpoints.")
+    st.markdown(f"For now, you can view the auto-generated FastAPI documentation here.")
+
+    else:
+        st.info("Results will be displayed here after analysis.")
+with tab_pricing:
+    st.header("Pricing Plans")
+    st.info("This section is under construction. It will detail the available subscription tiers.")
+
+with tab_analytics:
+    st.header("Historical Analytics")
+    st.info("This section is under construction. It will allow you to analyze trends over time.")
